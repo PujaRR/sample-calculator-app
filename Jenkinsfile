@@ -90,3 +90,83 @@ pipeline {
         }
     }
 }
+pipeline {
+    agent any
+
+    stages {
+        stage('Checkout') {
+            steps {
+                echo 'Stage 1: Checking out code from Git repository'
+                checkout scm
+            }
+        }
+
+        stage('Build') {
+            steps {
+                script {
+                    if (isUnix()) {
+                        sh '''
+                          echo "Node version:"
+                          node --version
+                          echo "npm version:"
+                          npm --version
+                          npm install
+                        '''
+                    } else {
+                        bat '''
+                          echo Node version:
+                          node --version
+                          echo npm version:
+                          npm --version
+                          npm install
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Test') {
+            steps {
+                script {
+                    if (isUnix()) {
+                        sh '''
+                          echo "Running Jest tests..."
+                          npx --yes jest --ci
+                        '''
+                    } else {
+                        bat '''
+                          echo Running Jest tests...
+                          npx --yes jest --ci
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Archive') {
+            steps {
+                script {
+                    if (isUnix()) {
+                        sh 'ls -la || true'
+                    } else {
+                        bat 'dir'
+                    }
+                }
+                echo 'Archiving artifacts...'
+                archiveArtifacts artifacts: '**/*.json, **/coverage/**, **/build/**', excludes: 'node_modules/**, .git/**'
+            }
+        }
+    }
+
+    post {
+        success {
+            echo '✅ Pipeline executed successfully!'
+        }
+        failure {
+            echo '❌ Pipeline failed!'
+        }
+        always {
+            echo 'Pipeline execution completed'
+        }
+    }
+}
