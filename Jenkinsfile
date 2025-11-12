@@ -24,6 +24,7 @@ pipeline {
                           echo "npm version:"
                           npm --version
                           npm install
+                          npm install --save-dev jest-junit
                         '''
                     } else {
                         bat '''
@@ -32,6 +33,7 @@ pipeline {
                           echo npm version:
                           npm --version
                           npm install
+                          npm install --save-dev jest-junit
                         '''
                     }
                 }
@@ -76,11 +78,11 @@ pipeline {
 
     post {
         success {
-            echo 'Pipeline executed successfully!'
+            echo '✅ Pipeline executed successfully!'
             archiveArtifacts artifacts: '**/coverage/**, **/build/**, package*.json', excludes: 'node_modules/**,.git/**', fingerprint: true
         }
         failure {
-            echo 'Pipeline failed!'
+            echo '❌ Pipeline failed!'
         }
         always {
             junit allowEmptyResults: true, testResults: 'test-results/*.xml'
