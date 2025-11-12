@@ -1,59 +1,102 @@
 pipeline {
-    agent any
-    
-    stages {
-        stage('Checkout') {
-            steps {
-                echo 'Stage 1: Checking out code from Git repository'
-                checkout scm
-                sh 'git --version'
-                sh 'echo "Repository cloned successfully"'
-            }
-        }
-        
-        stage('Build') {
-            steps {
-                echo 'Stage 2: Building the application'
-                sh 'npm install'
-                sh 'npm run build'
-                echo 'Build completed successfully'
-            }
-        }
-        
-        stage('Test') {
-            steps {
-                echo 'Stage 3: Running unit tests'
-                sh 'npm test'
-            }
-            post {
-                always {
-                    echo 'Test stage completed'
-                    // Archive test results if using JUnit reporter
-                }
-            }
-        }
-        
-        stage('Archive') {
-            steps {
-                echo 'Stage 4: Archiving build artifacts'
-                archiveArtifacts artifacts: '**/*', excludes: 'node_modules/**,coverage/**,.git/**'
-                echo 'Artifacts archived successfully'
-            }
-        }
-    }
-    
-    post {
-        success {
-            echo 'Pipeline executed successfully!'
-        }
-        failure {
-            echo 'Pipeline failed!'
-        }
-        always {
-            echo 'Pipeline execution completed'
-            // Clean workspace if needed
-            // cleanWs()
-        }
-    }
-}
+  agent any
 
+  environment {
+    JEST_JUNIT_OUTPUT = 'test-results/junit.xml'
+    CI = 'true'
+  }
+
+  stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+        script {
+          echo "Workspace: ${env.WORKSPACE}"
+          echo "Node/OS info:"
+          if (isUnix()) {
+            sh 'uname -a || true'
+          } else {
+            bat 'ver'
+          }
+        }
+      }
+    }
+
+    stage('Build') {
+      steps {
+        script {
+          if (isUnix()) {
+            sh '''
+              echo "Node version:"
+              node --version || true
+              echo "npm version:"
+              npm --version || true
+              if [ -f package.json ]; then
+                npm ci --no-audit --no-fund
+              else
+                echo "No package.json - skipping npm install"
+              fi
+            '''
+          } else {
+            bat '''
+              echo Node version:
+              node --version
+              echo npm version:
+              npm --version
+              if exist package.json (
+                npm ci --no-audit --no-fund
+              ) else (
+                echo No package.json - skipping npm install
+              )
+            '''
+          }
+        }
+      }
+    }
+
+    stage('Test') {
+      steps {
+        script {
+          if (isUnix()) {
+            sh '''
+              mkdir -p test-results
+              npx --yes jest --ci --reporters=default --reporters=jest-junit --outputFile=${JEST_JUNIT_OUTPUT}
+            '''
+          } else {
+            bat """
+              if not exist test-results mkdir test-results
+              npx --yes jest --ci --reporters=default --reporters=jest-junit --outputFile=%JEST_JUNIT_OUTPUT%
+            """
+          }
+        }
+      }
+      post {
+        always {
+          junit allowEmptyArchive: true, testResults: 'test-results/*.xml'
+        }
+      }
+    }
+
+    stage('Archive') {
+      steps {
+        script {
+          if (isUnix()) {
+            sh 'ls -la || true'
+          } else {
+            bat 'dir || true'
+          }
+        }
+      }
+    }
+  }
+
+  post {
+    success {
+      archiveArtifacts artifacts: '**/coverage/**, **/build/**, package*.json', excludes: 'node_modules/**,.git/**', fingerprint: true
+    }
+    always {
+      junit allowEmptyArchive: true, testResults: 'test-results/*.xml'
+      echo "Pipeline finished"
+    }
+  }
+}
